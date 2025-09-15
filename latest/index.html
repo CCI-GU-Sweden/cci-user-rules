@@ -1,26 +1,31 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CCI User Rules</title>
-<!-- Reuse the main site CSS so it looks the same in the iframe -->
+<title>CCI User Rules latest</title>
 <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
 <main class="page-content" aria-label="Content">
   <div class="wrapper">
-    <h1 id="ver-title">CCI User Rules</h1>
-    <div id="md-content"><em>Loading…</em></div>
+    <h1>Loading latest…</h1>
+    <p>If you're not redirected automatically, pick a version from the main site’s dropdown.</p>
   </div>
 </main>
 <script>
   (async function () {
-    const parts = location.pathname.split('/').filter(Boolean);
-    const tag = parts[parts.length - 1]; // versions/<TAG>/
-    const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
-
-    const resp = await fetch(mdUrl, { cache: 'no-store' });
-    const text = await resp.text();
-
-    document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
-    document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
+    try {
+      const r = await fetch('https://api.github.com/repos/CCI-GU-Sweden/cci-user-rules/tags', {
+        headers: { 'Accept': 'application/vnd.github+json' },
+        cache: 'no-store'
+      });
+      const tags = await r.json();
+      if (Array.isArray(tags) && tags.length) {
+        tags.sort((a,b)=> b.name.localeCompare(a.name, undefined, {numeric:true, sensitivity:'base'}));
+        location.replace(`../versions/${tags[0].name}/`);
+      } else {
+        document.body.insertAdjacentHTML('beforeend','<p>No tags found.</p>');
+      }
+    } catch (e) {
+      document.body.insertAdjacentHTML('beforeend','<p>Could not determine latest version.</p>');
+      console.warn(e);
+    }
   })();
 </script>
-<script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>

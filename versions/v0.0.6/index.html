@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CCI User Rules</title>
-<!-- Reuse the main site CSS so it looks the same in the iframe -->
+<!-- Use the compiled CSS from the main site -->
 <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
 <main class="page-content" aria-label="Content">
   <div class="wrapper">
@@ -13,13 +13,19 @@
 <script>
   (async function () {
     const parts = location.pathname.split('/').filter(Boolean);
-    const tag = parts[parts.length - 1]; // versions/<TAG>/
+    const tag = parts[parts.length - 1]; // .../versions/<TAG>/
     const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
-
+    
     const resp = await fetch(mdUrl, { cache: 'no-store' });
+    if (!resp.ok) {
+      document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`;
+      return;
+    }
     const text = await resp.text();
 
+    // Inject and render via Markdown-Tag (same tool you already use)
     document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
+    if (window.renderMarkdown) window.renderMarkdown();
     document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
   })();
 </script>
