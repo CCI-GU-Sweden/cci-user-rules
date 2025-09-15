@@ -24,44 +24,57 @@ jobs:
           DEFAULT_BUMP: patch
           TAG_PREFIX: v
 
-      - name: Prepare site folder with this version
+      - name: Build HTML for this tag (client-side Markdown)
         if: steps.tag.outputs.new_tag != ''
         run: |
           TAG="${{ steps.tag.outputs.new_tag }}"
-          echo "Publishing version $TAG"
-
-          # Grab (or create) gh-pages worktree
-          git clone --depth 1 --branch gh-pages \
-            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" site \
-            || mkdir -p site
-
-          # Force-enable Jekyll: remove .nojekyll if it exists
-          rm -f site/.nojekyll
-
           mkdir -p "site/versions/${TAG}" site/latest
 
-          # Create a Jekyll page for this tag (no layout => no theme required)
-          {
-            echo "---"
-            echo "title: CCI User Rules ${TAG}"
-            echo "---"
-            cat CCI_User_Rules.md
-          } > "site/versions/${TAG}/index.md"
+          cat > "site/versions/${TAG}/index.html" <<'EOF'
+          <!doctype html>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>CCI User Rules</title>
+          <!-- Reuse the main site CSS so it looks the same in the iframe -->
+          <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+          <main class="page-content" aria-label="Content">
+            <div class="wrapper">
+              <h1 id="ver-title">CCI User Rules</h1>
+              <div id="md-content"><em>Loading…</em></div>
+            </div>
+          </main>
+          <script>
+            (async function () {
+              const parts = location.pathname.split('/').filter(Boolean);
+              const tag = parts[parts.length - 1]; // versions/<TAG>/
+              const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
 
-          # Update 'latest' alias
-          rm -rf site/latest/*
-          cp "site/versions/${TAG}/index.md" site/latest/index.md
+              const resp = await fetch(mdUrl, { cache: 'no-store' });
+              const text = await resp.text();
 
-          # Minimal config (optional but nice)
-          if [ ! -f site/_config.yml ]; then
-            printf "title: CCI User Rules\n" > site/_config.yml
-          fi
+              document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
+              document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
+            })();
+          </script>
+          <script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
+          EOF
 
-      - name: Deploy to gh-pages (Jekyll enabled)
+          # keep a /latest/ alias
+          cp "site/versions/${TAG}/index.html" site/latest/index.html
+
+          # optional root redirect to /latest/
+          cat > site/index.html <<'EOF'
+          <!doctype html>
+          <meta http-equiv="refresh" content="0;url=./latest/">
+          <title>CCI User Rules</title>
+          <a href="./latest/">Go to latest</a>
+          EOF
+
+
+      - name: Deploy to gh-pages
         if: steps.tag.outputs.new_tag != ''
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
           publish_dir: site
-          enable_jekyll: true
