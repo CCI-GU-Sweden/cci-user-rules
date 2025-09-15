@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CCI User Rules</title>
+<!-- Reuse the main site CSS so it looks the same in the iframe -->
+<link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+<main class="page-content" aria-label="Content">
+  <div class="wrapper">
+    <h1 id="ver-title">CCI User Rules</h1>
+    <div id="md-content"><em>Loading…</em></div>
+  </div>
+</main>
+<script>
+  (async function () {
+    const parts = location.pathname.split('/').filter(Boolean);
+    const tag = parts[parts.length - 1]; // versions/<TAG>/
+    const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
+
+    const resp = await fetch(mdUrl, { cache: 'no-store' });
+    const text = await resp.text();
+
+    document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
+    document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
