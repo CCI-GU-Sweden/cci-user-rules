@@ -2,10 +2,10 @@ name: Release & Publish
 
 on:
   push:
-    branches: [ main ]   # every push to main tries to bump & tag
+    branches: [ main ]
 
 permissions:
-  contents: write        # needed to push tags and gh-pages
+  contents: write
 
 jobs:
   tag-and-publish:
@@ -21,26 +21,29 @@ jobs:
         uses: anothrNick/github-tag-action@1.75.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BUMP: patch   # override with #minor / #major / #none in commit msg
-          TAG_PREFIX: v         # makes tags like v1.2.3
+          DEFAULT_BUMP: patch
+          TAG_PREFIX: v
 
-      # Only publish if a new tag was created (skips on #none)
       - name: Prepare site folder with this version
         if: steps.tag.outputs.new_tag != ''
         run: |
           TAG="${{ steps.tag.outputs.new_tag }}"
           echo "Publishing version $TAG"
+
           # Grab (or create) gh-pages worktree
           git clone --depth 1 --branch gh-pages \
             "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" site \
             || mkdir -p site
+
+          # Force-enable Jekyll: remove .nojekyll if it exists
+          rm -f site/.nojekyll
+
           mkdir -p "site/versions/${TAG}" site/latest
 
-          # Create a Jekyll page for this tag from your Markdown source
+          # Create a Jekyll page for this tag (no layout => no theme required)
           {
             echo "---"
             echo "title: CCI User Rules ${TAG}"
-            echo "layout: default"
             echo "---"
             cat CCI_User_Rules.md
           } > "site/versions/${TAG}/index.md"
@@ -49,14 +52,14 @@ jobs:
           rm -rf site/latest/*
           cp "site/versions/${TAG}/index.md" site/latest/index.md
 
-          # Ensure minimal Jekyll config for Pages (optional)
+          # Minimal config (optional but nice)
           if [ ! -f site/_config.yml ]; then
-            echo "title: CCI User Rules" > site/_config.yml
+            printf "title: CCI User Rules\n" > site/_config.yml
           fi
 
-      - name: Deploy to gh-pages
+      - name: Deploy to gh-pages (Jekyll enabled)
         if: steps.tag.outputs.new_tag != ''
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
