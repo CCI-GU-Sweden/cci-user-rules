@@ -1,0 +1,63 @@
+name: Release & Publish
+
+on:
+  push:
+    branches: [ main ]   # every push to main tries to bump & tag
+
+permissions:
+  contents: write        # needed to push tags and gh-pages
+
+jobs:
+  tag-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and push tag
+        id: tag
+        uses: anothrNick/github-tag-action@1.75.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: patch   # override with #minor / #major / #none in commit msg
+          TAG_PREFIX: v         # makes tags like v1.2.3
+
+      # Only publish if a new tag was created (skips on #none)
+      - name: Prepare site folder with this version
+        if: steps.tag.outputs.new_tag != ''
+        run: |
+          TAG="${{ steps.tag.outputs.new_tag }}"
+          echo "Publishing version $TAG"
+          # Grab (or create) gh-pages worktree
+          git clone --depth 1 --branch gh-pages \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" site \
+            || mkdir -p site
+          mkdir -p "site/versions/${TAG}" site/latest
+
+          # Create a Jekyll page for this tag from your Markdown source
+          {
+            echo "---"
+            echo "title: CCI User Rules ${TAG}"
+            echo "layout: default"
+            echo "---"
+            cat CCI_User_Rules.md
+          } > "site/versions/${TAG}/index.md"
+
+          # Update 'latest' alias
+          rm -rf site/latest/*
+          cp "site/versions/${TAG}/index.md" site/latest/index.md
+
+          # Ensure minimal Jekyll config for Pages (optional)
+          if [ ! -f site/_config.yml ]; then
+            echo "title: CCI User Rules" > site/_config.yml
+          fi
+
+      - name: Deploy to gh-pages
+        if: steps.tag.outputs.new_tag != ''
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: site
