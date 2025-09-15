@@ -30,12 +30,17 @@ jobs:
           TAG="${{ steps.tag.outputs.new_tag }}"
           mkdir -p "site/versions/${TAG}" site/latest
 
+          # 1) Copy the compiled CSS from the main site (not the .scss)
+          curl -fsSL https://cci-gu-sweden.github.io/assets/css/style.css \
+            -o site/assets/css/style.css || echo "/* fallback: no CSS fetched */" > site/assets/css/style.css
+
+          # 2) Version page: /versions/<tag>/index.html
           cat > "site/versions/${TAG}/index.html" <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
           <title>CCI User Rules</title>
-          <!-- Reuse the main site CSS so it looks the same in the iframe -->
+          <!-- Use the compiled CSS from the main site (NOT .scss, NOT raw) -->
           <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
           <main class="page-content" aria-label="Content">
             <div class="wrapper">
@@ -46,23 +51,61 @@ jobs:
           <script>
             (async function () {
               const parts = location.pathname.split('/').filter(Boolean);
-              const tag = parts[parts.length - 1]; // versions/<TAG>/
-              const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
+              const tag = parts[parts.length - 1]; // .../versions/<TAG>/
 
+              const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
               const resp = await fetch(mdUrl, { cache: 'no-store' });
+              if (!resp.ok) {
+                document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`;
+                return;
+              }
               const text = await resp.text();
 
+              // Inject and render via Markdown-Tag (same tool you already use)
               document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
+              if (window.renderMarkdown) window.renderMarkdown();
               document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
             })();
           </script>
           <script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
           EOF
 
-          # keep a /latest/ alias
-          cp "site/versions/${TAG}/index.html" site/latest/index.html
+          # 3) Latest page: redirects to newest tag at runtime
+          cat > site/latest/index.html <<'EOF'
+          <!doctype html>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>CCI User Rules latest</title>
+          <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+          <main class="page-content" aria-label="Content">
+            <div class="wrapper">
+              <h1>Loading latest…</h1>
+              <p>If you're not redirected automatically, pick a version from the main site’s dropdown.</p>
+            </div>
+          </main>
+          <script>
+            (async function () {
+              try {
+                const r = await fetch('https://api.github.com/repos/CCI-GU-Sweden/cci-user-rules/tags', {
+                  headers: { 'Accept': 'application/vnd.github+json' },
+                  cache: 'no-store'
+                });
+                const tags = await r.json();
+                if (Array.isArray(tags) && tags.length) {
+                  tags.sort((a,b)=> b.name.localeCompare(a.name, undefined, {numeric:true, sensitivity:'base'}));
+                  location.replace(`../versions/${tags[0].name}/`);
+                } else {
+                  document.body.insertAdjacentHTML('beforeend','<p>No tags found.</p>');
+                }
+              } catch (e) {
+                document.body.insertAdjacentHTML('beforeend','<p>Could not determine latest version.</p>');
+                console.warn(e);
+              }
+            })();
+          </script>
+          EOF
 
-          # optional root redirect to /latest/
+          # Optional root redirect to /latest/
           cat > site/index.html <<'EOF'
           <!doctype html>
           <meta http-equiv="refresh" content="0;url=./latest/">
