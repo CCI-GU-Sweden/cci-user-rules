@@ -60,7 +60,7 @@ Based on their training and experience, users are divided into the following cat
 ## 6. Data handling 
 
 - While acquiring the images, save them in a folder titled with your full name in the **Users** folder (on the desktop of each microscope computer). 
-- At the end of the imaging session, copy your images immediately to the ***CCI transfer server***. It is ***strictly forbidden to use USB sticks***!
+- At the end of the imaging session, copy your images immediately to the ***CCI transfer server***. It is ***strictly forbidden to use USB sticks***!  
 - All images present on the microscope computers older than **4 weeks** will be **automatically deleted**.
 - Data transfer is allowed in only one direction: **FROM** the CCI computers **TO** user backup storage solution. The CCI transfer server is used only for transfer and short-term storage (max. **4** weeks), and must be regularly emptied after the images have been backed up. 
 - It is not allowed to use the CCI transfer server for long-term storage or upload anything, apart from images or data acquired at the CCI. 
