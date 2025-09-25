@@ -1,4 +1,4 @@
-name: Release & Publish
+name: Release & Publish (CalVer)
 
 on:
   push:
@@ -11,106 +11,116 @@ jobs:
   tag-and-publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
 
-      - name: Bump version and push tag
-        id: tag
-        uses: anothrNick/github-tag-action@1.75.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BUMP: patch
-          TAG_PREFIX: v
-
-      - name: Build HTML for this tag (client-side Markdown)
-        if: steps.tag.outputs.new_tag != ''
+      # Skip tagging if the last commit message contains #none
+      - name: Decide if we should tag
+        id: decide
         run: |
-          TAG="${{ steps.tag.outputs.new_tag }}"
+          msg="$(git log -1 --pretty=%B)"
+          if echo "$msg" | grep -qi "#none"; then
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+          fi
+
+      # Create a CalVer tag: YYYY.MM.DD or YYYY.MM.DD.N (N increments if multiple pushes/day)
+      - name: Create CalVer tag
+        if: steps.decide.outputs.should_tag == 'true'
+        id: calver
+        run: |
+          git fetch --tags --quiet
+          BASE="$(date -u +%Y.%m.%d)"
+          TAG="$BASE"
+          n=1
+          while git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; do
+            n=$((n+1))
+            TAG="$BASE.$n"
+          done
+          echo "new_tag=$TAG" >> $GITHUB_OUTPUT
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Stop if no new tag
+        if: steps.decide.outputs.should_tag != 'true'
+        run: echo "Commit contains #none; skipping publish."
+
+      # Build version and latest pages (Markdown rendered client-side, no duplicate H1)
+      - name: Build HTML for this tag (client-side Markdown)
+        if: steps.calver.outputs.new_tag != ''
+        run: |
+          TAG="${{ steps.calver.outputs.new_tag }}"
           mkdir -p "site/versions/${TAG}" site/latest
 
-          # 1) Version page: /versions/<tag>/index.html
+          # Version page: /versions/<TAG>/index.html
           cat > "site/versions/${TAG}/index.html" <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
           <title>CCI User Rules</title>
-          <!-- Use the compiled CSS from the main site -->
           <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
-          <div id="main_content_wrap" class="wrapper">
+
+          <!-- Use your theme's light content wrappers -->
+          <div id="main_content_wrap" class="outer">
             <section id="main_content" class="inner">
-              <h1 id="ver-title">CCI User Rules</h1>
               <div id="md-content"><em>Loading…</em></div>
             </section>
           </div>
 
           <script>
+            function parseTag(t){const m=t.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.(\d+))?$/);return m?{y:+m[1],m:+m[2],d:+m[3],n:+(m[4]||0)}:null;}
+
             (async function () {
               const parts = location.pathname.split('/').filter(Boolean);
               const tag = parts[parts.length - 1]; // .../versions/<TAG>/
-              const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
-              
-              const resp = await fetch(mdUrl, { cache: 'no-store' });
-              if (!resp.ok) {
-                document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`;
-                return;
-              }
-              const text = await resp.text();
 
-              // Inject and render via Markdown-Tag (same tool you already use)
+              const mdUrl = `https://raw.githubusercontent.com/CCI-GU-Sweden/cci-user-rules/${tag}/CCI_User_Rules.md`;
+              const resp = await fetch(mdUrl, { cache: 'no-store' });
+              if (!resp.ok) { document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`; return; }
+
+              let text = await resp.text();
+              // Inject the tag (date version) where you put {{VERSION}} or {{TAG}} in the Markdown
+              text = text.replace(/\{\{\s*(VERSION|TAG)\s*\}\}/gi, tag);
+
+              // Render via Markdown-Tag
               document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
               if (window.renderMarkdown) window.renderMarkdown();
-              document.getElementById('ver-title').textContent = `CCI User Rules ${tag}`;
             })();
           </script>
           <script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
           EOF
 
-          # 2) Latest page: redirects to newest tag at runtime
+          # Latest page: find newest CalVer and redirect
           cat > site/latest/index.html <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
           <title>CCI User Rules latest</title>
           <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
-          <div id="main_content_wrap" class="wrapper">
-            <section id="main_content" class="inner">
-              <h1 id="ver-title">CCI User Rules</h1>
-              <div id="md-content"><em>Loading…</em></div>
-            </section>
-          </div>
-          
+          <div id="main_content_wrap" class="outer"><section id="main_content" class="inner"><h1>Loading latest…</h1></section></div>
           <script>
+            function key(t){const m=t.name.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.(\d+))?$/);return m?{y:+m[1],m:+m[2],d:+m[3],n:+(m[4]||0)}:{y:0,m:0,d:0,n:0};}
             (async function () {
-              try {
-                const r = await fetch('https://api.github.com/repos/CCI-GU-Sweden/cci-user-rules/tags', {
-                  headers: { 'Accept': 'application/vnd.github+json' },
-                  cache: 'no-store'
-                });
-                const tags = await r.json();
-                if (Array.isArray(tags) && tags.length) {
-                  tags.sort((a,b)=> b.name.localeCompare(a.name, undefined, {numeric:true, sensitivity:'base'}));
-                  location.replace(`../versions/${tags[0].name}/`);
-                } else {
-                  document.body.insertAdjacentHTML('beforeend','<p>No tags found.</p>');
-                }
-              } catch (e) {
-                document.body.insertAdjacentHTML('beforeend','<p>Could not determine latest version.</p>');
-                console.warn(e);
+              const r = await fetch('https://api.github.com/repos/CCI-GU-Sweden/cci-user-rules/tags',{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+              const tags = await r.json();
+              if (Array.isArray(tags) && tags.length){
+                tags.sort((a,b)=>{const A=key(a),B=key(b);return B.y-A.y||B.m-A.m||B.d-A.d||B.n-A.n;});
+                location.replace(`../versions/${tags[0].name}/`);
+              } else {
+                document.body.insertAdjacentHTML('beforeend','<p>No tags found.</p>');
               }
             })();
           </script>
           EOF
 
-          # Optional root redirect to /latest/
+          # Root redirect → /latest/
           cat > site/index.html <<'EOF'
           <!doctype html>
           <meta http-equiv="refresh" content="0;url=./latest/">
           <title>CCI User Rules</title>
           <a href="./latest/">Go to latest</a>
           EOF
-
 
       - name: Deploy to gh-pages
         if: steps.tag.outputs.new_tag != ''

@@ -1,8 +1,10 @@
-# **THE SAHLGRENSKA ACADEMY**
+# **Gothenburg University**
 
 ## **CENTRE FOR CELLULAR IMAGING**
+
 ___
-# CCI User Rules
+
+# CCI User Rules — {{VERSION}}
 
 **All users are required to read and understand the following CCI User Rules and confirm their acceptance** in order to provide convenient and reliable access to high-quality imaging for as many people as possible while protecting both the users and the instruments from the consequences of any misuse.  
 
