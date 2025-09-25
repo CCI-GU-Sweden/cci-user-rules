@@ -30,8 +30,8 @@ jobs:
 
           git fetch --tags --quiet
 
-          # yyyy.m.d (no zero padding). Use +%Y.%m.%d if you prefer 2025.09.20.
-          BASE="$(date -u +%Y.%m.%d)"
+          # yyyy.mm (zero padding)
+          BASE="$(date -u +%Y.%m)"
           TAG="$BASE"
           n=1
           # If a tag for today already exists, append .2, .3, ...
@@ -50,25 +50,33 @@ jobs:
           echo "Created tag: $TAG"
 
       - name: Build HTML for this tag (client-side Markdown)
-        if: env.TAG != ''             # <-- simple, reliable gate
+        if: env.TAG != ''
         shell: bash
         run: |
           set -euo pipefail
           TAG="${{ env.TAG }}"
           mkdir -p "site/versions/${TAG}" site/latest
 
-          # Version page
+          # 1) publish any images/files under assets/ at the site root
+          if [ -d assets ]; then
+            mkdir -p site/assets
+            cp -R assets/* site/assets/
+          fi
+
+          # 2) Version page
           cat > "site/versions/${TAG}/index.html" <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
           <title>CCI User Rules</title>
           <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+
           <div id="main_content_wrap" class="outer">
             <section id="main_content" class="inner">
               <div id="md-content"><em>Loading…</em></div>
             </section>
           </div>
+
           <script>
             (async function () {
               const parts = location.pathname.split('/').filter(Boolean);
@@ -78,9 +86,20 @@ jobs:
               const resp = await fetch(mdUrl, { cache: 'no-store' });
               if (!resp.ok) { document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`; return; }
 
-              // Inject {{VERSION}} / {{TAG}} into your Markdown
               let text = await resp.text();
+
+              // Inject the version/date
               text = text.replace(/\{\{\s*(VERSION|TAG)\s*\}\}/gi, tag);
+
+              // Rewrite RELATIVE image sources like (assets/foo.png) -> /cci-user-rules/assets/foo.png
+              const siteBase = '/cci-user-rules/';
+              text = text
+                // markdown images ![alt](relative)
+                .replace(/!\[([^\]]*)\]\(((?!https?:|\/)[^)]+)\)/g,
+                         (m, alt, rel) => `![${alt}](${siteBase}${rel.replace(/^\.?\/*/,'')})`)
+                // html <img src="relative">
+                .replace(/<img\s+([^>]*?)src=["']((?!https?:|\/)[^"']+)["']([^>]*)>/gi,
+                         (m, pre, rel, post) => `<img ${pre}src="${siteBase}${rel.replace(/^\.?\/*/,'')}"${post}>`);
 
               document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
               if (window.renderMarkdown) window.renderMarkdown();
@@ -89,7 +108,7 @@ jobs:
           <script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
           EOF
 
-          # Latest page (redirects to newest CalVer)
+          # Latest page
           cat > site/latest/index.html <<'EOF'
           <!doctype html>
           <meta charset="utf-8">
@@ -105,7 +124,7 @@ jobs:
             function key(t){const m=t.name.match(/^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.(\d+))?$/);return m?{y:+m[1],m:+m[2],d:+m[3],n:+(m[4]||0)}:{y:0,m:0,d:0,n:0};}
             (async function () {
               const r = await fetch('https://api.github.com/repos/CCI-GU-Sweden/cci-user-rules/tags',
-              { headers: { 'Accept': 'application/vnd.github+json' }, cache: 'no-store' });
+                { headers: { 'Accept': 'application/vnd.github+json' }, cache:'no-store' });
               const tags = await r.json();
               if (Array.isArray(tags) && tags.length){
                 tags.sort((a,b)=>{const A=key(a),B=key(b);return B.y-A.y||B.m-A.m||B.d-A.d||B.n-A.n;});
@@ -116,7 +135,7 @@ jobs:
             })();
           </script>
           EOF
-
+  
           # Root redirect → /latest/
           cat > site/index.html <<'EOF'
           <!doctype html>
@@ -124,6 +143,7 @@ jobs:
           <title>CCI User Rules</title>
           <a href="./latest/">Go to latest</a>
           EOF
+
 
       - name: Deploy to gh-pages
         if: env.TAG != ''             # <-- same simple gate

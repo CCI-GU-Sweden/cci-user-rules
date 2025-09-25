@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CCI User Rules — Preview</title>
+<!-- Reuse the main site's compiled CSS so it looks identical -->
+<link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+
+<div id="main_content_wrap" class="outer">
+  <section id="main_content" class="inner">
+    <div id="md-content"><em>Loading…</em></div>
+  </section>
+</div>
+
+<script>
+(async function () {
+  // Load the local Markdown file
+  const mdUrl = 'CCI_User_Rules.md';
+  const resp = await fetch(mdUrl, { cache: 'no-store' });
+  let text = await resp.text();
+
+  // Put a dev version marker into the doc (so {{VERSION}} shows something)
+  const today = new Date();
+  const calver = `${today.getFullYear()}.${today.getMonth()+1}`;
+  text = text.replace(/\{\{\s*(VERSION|TAG)\s*\}\}/gi, `DEV-${calver}`);
+
+  // Rewrite RELATIVE image srcs so they work locally (prefix nothing when localhost)
+  const siteBase = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '' : '/cci-user-rules/';
+  text = text
+    // markdown images
+    .replace(/!\[([^\]]*)\]\(((?!https?:|\/)[^)]+)\)/g,
+             (m, alt, rel) => `![${alt}](${siteBase}${rel.replace(/^\.?\/*/,'')})`)
+    // html <img>
+    .replace(/<img\s+([^>]*?)src=["']((?!https?:|\/)[^"']+)["']([^>]*)>/gi,
+             (m, pre, rel, post) => `<img ${pre}src="${siteBase}${rel.replace(/^\.?\/*/,'')}"${post}>`);
+
+  // Render using the same component as production
+  document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
+  if (window.renderMarkdown) window.renderMarkdown();
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/gh/MarketingPipeline/Markdown-Tag/markdown-tag.js"></script>
