@@ -3,11 +3,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>CCI User Rules</title>
 <link rel="stylesheet" href="https://cci-gu-sweden.github.io/assets/css/style.css">
+
 <div id="main_content_wrap" class="outer">
   <section id="main_content" class="inner">
     <div id="md-content"><em>Loading…</em></div>
   </section>
 </div>
+
 <script>
   (async function () {
     const parts = location.pathname.split('/').filter(Boolean);
@@ -17,9 +19,20 @@
     const resp = await fetch(mdUrl, { cache: 'no-store' });
     if (!resp.ok) { document.getElementById('md-content').textContent = `Failed to load ${mdUrl} (${resp.status})`; return; }
 
-    // Inject {{VERSION}} / {{TAG}} into your Markdown
     let text = await resp.text();
+
+    // Inject the version/date
     text = text.replace(/\{\{\s*(VERSION|TAG)\s*\}\}/gi, tag);
+
+    // Rewrite RELATIVE image sources like (assets/foo.png) -> /cci-user-rules/assets/foo.png
+    const siteBase = '/cci-user-rules/';
+    text = text
+      // markdown images ![alt](relative)
+      .replace(/!\[([^\]]*)\]\(((?!https?:|\/)[^)]+)\)/g,
+               (m, alt, rel) => `![${alt}](${siteBase}${rel.replace(/^\.?\/*/,'')})`)
+      // html <img src="relative">
+      .replace(/<img\s+([^>]*?)src=["']((?!https?:|\/)[^"']+)["']([^>]*)>/gi,
+               (m, pre, rel, post) => `<img ${pre}src="${siteBase}${rel.replace(/^\.?\/*/,'')}"${post}>`);
 
     document.getElementById('md-content').innerHTML = '<md>'+ text +'</md>';
     if (window.renderMarkdown) window.renderMarkdown();
