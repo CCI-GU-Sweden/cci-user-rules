@@ -4,7 +4,7 @@
   margin:0 0 1rem 0;
 ">
   <!-- Logo (stored at assets/gu_logo.png) -->
-  <img src="/assets/gu_logo.png" alt="University of Gothenburg logo"
+  <img src="/assets/GU_logo.png" alt="University of Gothenburg logo"
        style="width:150px; height:auto; flex:0 0 auto;">
 
   <!-- Title block (centered next to the logo; wraps under it on small screens) -->
